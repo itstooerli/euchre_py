@@ -12,6 +12,10 @@ class Card:
     def __init__(self, value, suit):
         self.value = value
         self.suit = suit
+    
+    def get_card_string(self):
+        return f" {self.value}{self.suit.value}"
+
 
 class Deck:
     def __init__(self, values, suits):
@@ -37,8 +41,78 @@ class Player:
     def add_card(self, card):
         self.hand.append(card)
 
+    def sort_hand(self, trump_suit):
+        def compare_pre_trump(card : Card):
+            value = 0
+            if card.value == "A":
+                value = 1
+            elif card.value == "K":
+                value = 2
+            elif card.value == "Q":
+                value = 3
+            elif card.value == "J":
+                value = 4
+            elif card.value == "10":
+                value = 5
+            elif card.value == "9":
+                value = 6
+
+            if card.suit == Suit.SPADES:
+                value = value + 0
+            elif card.suit == Suit.HEARTS:
+                value = value + 6
+            elif card.suit == Suit.CLUBS:
+                value = value + 12
+            elif card.suit == Suit.DIAMONDS:
+                value = value + 18
+            
+            return value
+        
+        def compare_trump(card : Card):
+            value = 0
+            if card.value == "J":
+                if card.suit == trump_suit:
+                    value = -7
+                    return value
+                elif ((trump_suit == Suit.SPADES and card.suit == Suit.CLUBS) or 
+                      (trump_suit == Suit.CLUBS and card.suit == Suit.SPADES) or
+                      (trump_suit == Suit.HEARTS and card.suit == Suit.DIAMONDS) or
+                      (trump_suit == Suit.DIAMONDS and card.suit == Suit.HEARTS)):
+                    value = -6
+                    return value
+
+            if card.value == "A":
+                value = 1
+            elif card.value == "K":
+                value = 2
+            elif card.value == "Q":
+                value = 3
+            elif card.value == "J":
+                value = 4
+            elif card.value == "10":
+                value = 5
+            elif card.value == "9":
+                value = 6
+
+            if card.suit == trump_suit:
+                value = value - 6
+            elif card.suit == Suit.SPADES:
+                value = value + 0
+            elif card.suit == Suit.HEARTS:
+                value = value + 6
+            elif card.suit == Suit.CLUBS:
+                value = value + 12
+            elif card.suit == Suit.DIAMONDS:
+                value = value + 18
+            
+            return value
+            
+        self.hand.sort(key = compare_pre_trump if not trump_suit else compare_trump)
+
 class EuchreTable:
-    def __init__(self):
+    def __init__(self, test_mode = False):
+        self.test_mode = test_mode
+        
         self.players = {
             0 : Player(0),
             1 : Player(1),
@@ -48,7 +122,25 @@ class EuchreTable:
         values = ["9","10","J","Q","K","A"]
         suits = [Suit.SPADES, Suit.HEARTS, Suit.CLUBS, Suit.DIAMONDS]
         self.deck = Deck(values, suits)
+        self.dealer = 0
+        self.up_card = None
+        self.trump_suit = None
     
+    def determine_dealer(self):
+        if self.test_mode: print("Determing Dealer...")
+        curr_seat = 0
+        self.deck.shuffle()
+        curr_card = self.deck.deal_one_card()
+        if self.test_mode: print(f"({curr_seat % 4}){curr_card.get_card_string()}", end='')
+
+        while curr_card.value != "J" or curr_card.suit not in (Suit.SPADES, Suit.CLUBS):
+            curr_seat = curr_seat + 1
+            curr_card = self.deck.deal_one_card()
+            if self.test_mode: print(f" ({curr_seat % 4}){curr_card.get_card_string()}", end='')
+        
+        self.dealer = curr_seat % 4
+        if self.test_mode: print()
+
     def deal_cards(self):
         self.deck.shuffle()
         num_cards = 0
@@ -56,18 +148,65 @@ class EuchreTable:
             for player in self.players.values():
                 player.add_card(self.deck.deal_one_card())
             num_cards = num_cards + 1
+        
+        self.up_card = self.deck.deal_one_card()
+    
+    def euchre_deal_cards(self):
+        self.deck.shuffle()
+        max_hand_size = 5
+
+        num_cards_to_deal = 0
+        curr_seat = (self.dealer + 1) % 4
+        while len(self.players[self.dealer].hand) < max_hand_size:
+            player = self.players[curr_seat]
+            if len(player.hand) == 0:
+                num_cards_to_deal = 2 if num_cards_to_deal == 3 else 3
+            else:
+                num_cards_to_deal = max_hand_size - len(player.hand)
+            
+            for _ in range(num_cards_to_deal):
+                player.add_card(self.deck.deal_one_card())
+            if self.test_mode: self.print_state()
+            
+            curr_seat = (curr_seat + 1) % 4
+        
+        self.up_card = self.deck.deal_one_card()
+        self.sort_player_hands()
+
+    def sort_player_hands(self):
+        for player in self.players.values():
+            player.sort_hand(self.trump_suit)
     
     def print_state(self):
+        ## Print Game Info
+        print(f"Dealer: Player {self.dealer}")
+        
+        ## Print Deck
+        deck_info = "Deck :"
+        for card in self.deck.current:
+            deck_info = deck_info + card.get_card_string()
+        print(deck_info)
+        
+        ## Print Hands
         for player_no, player in self.players.items():
             player_info = f"{player_no} :"
             for card in player.hand:
-                player_info = player_info + f" {card.value}{card.suit.value}"
+                player_info = player_info + card.get_card_string()
             print(player_info)
+        
+        ## Print Up-Card
+        if self.up_card: print(f"Up Card: {self.up_card.get_card_string()}")
+    
+    def play(self):
+        self.determine_dealer()
+        self.euchre_deal_cards()
+        if self.test_mode: self.trump_suit = self.up_card.suit
+        if self.test_mode: self.sort_player_hands()
+        self.print_state()
 
 def main():
-    game = EuchreTable()
-    game.deal_cards()
-    game.print_state()
+    game = EuchreTable(True)
+    game.play()
 
 if __name__ == "__main__":
     main()
