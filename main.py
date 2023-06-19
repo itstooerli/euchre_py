@@ -8,6 +8,16 @@ class Suit(Enum):
     CLUBS = "\u2667"
     DIAMONDS = "\u2662"
 
+class PlayerTrumpDecision(Enum):
+    PLAYER = 0
+    ALWAYS_ACCEPT = 1
+    RANDOM = 2
+
+class PlayerCardDecision(Enum):
+    PLAYER = 0
+    LAST_CARD = 1
+    RANDOM = 2
+
 class Card:
     def __init__(self, value, suit):
         self.value = value
@@ -31,12 +41,18 @@ class Deck:
     
     def deal_one_card(self):
         return self.current.pop()
+    
+    def add_back_to_deck(self, card):
+        self.current.append(card)
 
 class Player:
-    def __init__(self, seat_number):
+    def __init__(self, seat_number, is_player = False, trump_decision_logic = PlayerTrumpDecision.ALWAYS_ACCEPT, card_decision_logic = PlayerCardDecision.LAST_CARD):
         self.hand = []
         self.seat_number = seat_number
         self.partner_seat_number = (seat_number + 2) % 4
+        self.is_player = is_player
+        self.trump_decision_logic = trump_decision_logic
+        self.card_decision_logic = card_decision_logic
     
     def add_card(self, card):
         self.hand.append(card)
@@ -106,18 +122,34 @@ class Player:
             
         self.hand.sort(key = compare_pre_trump if not trump_suit else compare_trump)
     
-    def decide_trump(self, up_card):
+    def decide_trump(self, up_card, hidden_up_card, dealer):
+        ## TODO: Add AI to determine whether choosing trump is worth it
+        if self.trump_decision_logic == PlayerTrumpDecision.ALWAYS_ACCEPT:
+            return up_card.suit
+        elif self.trump_decision_logic == PlayerTrumpDecision.RANDOM:
+            if up_card:
+                return random.choice([up_card.suit, None])
+            else:
+                return random.choice([e.value for e in Suit if e != hidden_up_card.suit] + [None])
+
         return up_card.suit
 
+    def play_card(self, lead_seat, cards_played):
+        ## TODO
+        if self.card_decision_logic == PlayerCardDecision.LAST_CARD:
+            return self.hand.pop()
+        
+        return self.hand.pop()
+
 class EuchreTable:
-    def __init__(self, test_mode = False):
+    def __init__(self, trump_logic = [], test_mode = False):
         self.test_mode = test_mode
         
         self.players = {
-            0 : Player(0),
-            1 : Player(1),
-            2 : Player(2),
-            3 : Player(3),
+            0 : Player(0, False, trump_logic[0] if len(trump_logic) > 0 else None),
+            1 : Player(1, False, trump_logic[1] if len(trump_logic) > 1 else None),
+            2 : Player(2, False, trump_logic[2] if len(trump_logic) > 2 else None),
+            3 : Player(3, False, trump_logic[3] if len(trump_logic) > 3 else None),
         }
         values = ["9","10","J","Q","K","A"]
         suits = [Suit.SPADES, Suit.HEARTS, Suit.CLUBS, Suit.DIAMONDS]
@@ -125,8 +157,15 @@ class EuchreTable:
         self.dealer = 0
         self.curr_seat = 0
         self.up_card = None
+        self.hidden_up_card = None
         self.trump_suit = None
         self.left_bower_suit = None
+        self.lead_seat = None
+        self.score_02 = 0
+        self.score_13 = 0
+        self.cards_played = {0 : None, 1 : None, 2 : None, 3 : None}
+        self.tricks_won_02 = 0
+        self.tricks_won_13 = 0
     
     def determine_dealer(self):
         if self.test_mode: print("Determing Dealer...")
@@ -143,16 +182,6 @@ class EuchreTable:
         self.dealer = curr_seat % 4
         self.curr_seat = (self.dealer + 1) % 4
         if self.test_mode: print()
-
-    def deal_cards(self):
-        self.deck.shuffle()
-        num_cards = 0
-        while num_cards < 5:
-            for player in self.players.values():
-                player.add_card(self.deck.deal_one_card())
-            num_cards = num_cards + 1
-        
-        self.up_card = self.deck.deal_one_card()
     
     def euchre_deal_cards(self):
         self.deck.shuffle()
@@ -182,16 +211,22 @@ class EuchreTable:
     
     def determine_trump(self):
         self.curr_seat = (self.dealer + 1) % 4
-        self.trump_suit = self.players[self.curr_seat].decide_trump(self.up_card)
+        self.trump_suit = self.players[self.curr_seat].decide_trump(self.up_card, self.hidden_up_card, self.dealer)
         
         while not self.trump_suit:
+            print(f"Seat {self.curr_seat} passes.")
             self.curr_seat = (self.curr_seat + 1) % 4
             
             ## All players passed on up card
             if self.curr_seat == (self.dealer + 1) % 4:
-                self.up_card = None
+                if self.up_card:
+                    self.hidden_up_card = self.up_card
+                    self.deck.add_back_to_deck(self.up_card)
+                    self.up_card = None
+                else:
+                    return False
             
-            self.trump_suit = self.players[self.curr_seat].decide_trump(self.up_card)
+            self.trump_suit = self.players[self.curr_seat].decide_trump(self.up_card, self.hidden_up_card, self.dealer)
         
         if self.trump_suit == Suit.SPADES:
             self.left_bower_suit = Suit.CLUBS
@@ -201,13 +236,40 @@ class EuchreTable:
             self.left_bower_suit = Suit.SPADES
         elif self.trump_suit == Suit.DIAMONDS:
             self.left_bower_suit = Suit.HEARTS
+        
+        print(f"Seat {self.curr_seat} determined trump.")
 
         self.curr_seat = (self.dealer + 1) % 4
         self.sort_player_hands()
+        return True
+
+    def play_trick(self):
+        num_cards_played = 0
+        while num_cards_played < 4:
+            self.cards_played[self.curr_seat] = self.players[self.curr_seat].play_card(self.lead_seat, self.cards_played)
+            print("Table")
+            for player in self.cards_played:
+                print(f"{player} : {self.cards_played[player].get_card_string() if self.cards_played[player] else 'None'}")
+            self.curr_seat = (self.curr_seat + 1) % 4
+            num_cards_played = num_cards_played + 1
+        self.process_trick()
+    
+    def process_trick(self):
+        ## TODO
+        self.tricks_won_02 = self.tricks_won_02 + 1
+        self.print_state()
+        print(f"Team 02: {self.tricks_won_02} - Team 03: {self.tricks_won_13}")
+    
+    def play_round(self):
+        while self.tricks_won_02 + self.tricks_won_13 < 5:
+            self.lead_seat = self.curr_seat
+            self.cards_played = {0 : None, 1 : None, 2 : None, 3 : None}
+            self.play_trick()
 
     def print_state(self):
         ## Print Game Info
         print(f"Dealer: Player {self.dealer}")
+        if self.trump_suit: print(f"Seat {self.curr_seat} turn")
         
         ## Print Deck
         deck_info = "Deck :"
@@ -230,12 +292,21 @@ class EuchreTable:
     
     def play(self):
         self.determine_dealer()
-        self.euchre_deal_cards()
-        self.determine_trump()
-        self.print_state()
+        while True:
+            self.euchre_deal_cards()
+            self.print_state()
+            if not self.determine_trump():
+                ## TODO: If dealer, stuck or reshuffle TBD
+                self.print_state()
+                input("No trump. Press Enter to continue...")
+                continue
+            self.print_state()
+            self.play_round()
+            if self.test_mode: break
+            input("Press Enter to continue...")
 
 def main():
-    game = EuchreTable(True)
+    game = EuchreTable([PlayerTrumpDecision.RANDOM, PlayerTrumpDecision.RANDOM, PlayerTrumpDecision.RANDOM, PlayerTrumpDecision.RANDOM], True)
     game.play()
 
 if __name__ == "__main__":
