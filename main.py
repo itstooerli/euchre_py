@@ -161,6 +161,7 @@ class EuchreTable:
         self.trump_suit = None
         self.left_bower_suit = None
         self.lead_seat = None
+        self.trump_caller = None
         self.score_02 = 0
         self.score_13 = 0
         self.cards_played = {0 : None, 1 : None, 2 : None, 3 : None}
@@ -237,7 +238,8 @@ class EuchreTable:
         elif self.trump_suit == Suit.DIAMONDS:
             self.left_bower_suit = Suit.HEARTS
         
-        print(f"Seat {self.curr_seat} determined trump.")
+        self.trump_caller = self.curr_seat
+        print(f"Seat {self.trump_caller} determined trump.")
 
         self.curr_seat = (self.dealer + 1) % 4
         self.sort_player_hands()
@@ -258,13 +260,44 @@ class EuchreTable:
         ## TODO
         self.tricks_won_02 = self.tricks_won_02 + 1
         self.print_state()
-        print(f"Team 02: {self.tricks_won_02} - Team 03: {self.tricks_won_13}")
+        print(f"TRICKS - Team 02: {self.tricks_won_02} - Team 13: {self.tricks_won_13}")
     
     def play_round(self):
+        self.euchre_deal_cards()
+        self.print_state()
+        if not self.determine_trump():
+            ## TODO: If dealer, stuck or reshuffle TBD
+            self.print_state()
+            input("No trump. Press Enter to continue...")
+            return
+        self.print_state()
+        
+        self.tricks_won_02 = self.tricks_won_03 =  0
         while self.tricks_won_02 + self.tricks_won_13 < 5:
             self.lead_seat = self.curr_seat
             self.cards_played = {0 : None, 1 : None, 2 : None, 3 : None}
             self.play_trick()
+        self.process_round()
+
+        input("Press Enter to continue...")
+    
+    def process_round(self):
+        if self.trump_caller in (0, 2):
+            if self.tricks_won_02 == 5:
+                self.score_02 = self.score_02 + 2
+            elif self.tricks_won_02 >= 3:
+                self.score_02 = self.score_02 + 1
+            else:
+                self.score_13 = self.score_13 + 2
+        else:
+            if self.tricks_won_13 == 5:
+                self.score_13 = self.score_13 + 2
+            elif self.tricks_won_13 >= 3:
+                self.score_13 = self.score_13 + 1
+            else:
+                self.score_02 = self.score_02 + 2
+        
+        print(f"SCORE - Team 02: {self.score_02} - Team 13: {self.score_13}")
 
     def print_state(self):
         ## Print Game Info
@@ -292,18 +325,8 @@ class EuchreTable:
     
     def play(self):
         self.determine_dealer()
-        while True:
-            self.euchre_deal_cards()
-            self.print_state()
-            if not self.determine_trump():
-                ## TODO: If dealer, stuck or reshuffle TBD
-                self.print_state()
-                input("No trump. Press Enter to continue...")
-                continue
-            self.print_state()
+        while self.score_02 < 10 and self.score_13 < 10:
             self.play_round()
-            if self.test_mode: break
-            input("Press Enter to continue...")
 
 def main():
     game = EuchreTable([PlayerTrumpDecision.RANDOM, PlayerTrumpDecision.RANDOM, PlayerTrumpDecision.RANDOM, PlayerTrumpDecision.RANDOM], True)
