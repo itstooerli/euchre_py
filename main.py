@@ -168,6 +168,26 @@ class EuchreTable:
         self.tricks_won_02 = 0
         self.tricks_won_13 = 0
     
+    def is_value_bigger(self, card1, card2):
+        value1 = self.assign_card_value(card1)
+        value2 = self.assign_card_value(card2)
+        return value1 > value2
+    
+    def assign_card_value(self, card):
+        if card.value == "9":
+            return 0
+        elif card.value == "10":
+            return 1
+        elif card.value == "J":
+            return 2
+        elif card.value == "Q":
+            return 3
+        elif card.value == "K":
+            return 4
+        elif card.value == "A":
+            return 5
+        return 0
+
     def determine_dealer(self):
         if self.test_mode: print("Determing Dealer...")
         curr_seat = 0
@@ -255,12 +275,49 @@ class EuchreTable:
             self.curr_seat = (self.curr_seat + 1) % 4
             num_cards_played = num_cards_played + 1
         self.process_trick()
+        input("Press Enter to continue...")
     
     def process_trick(self):
-        ## TODO
-        self.tricks_won_02 = self.tricks_won_02 + 1
-        self.print_state()
-        print(f"TRICKS - Team 02: {self.tricks_won_02} - Team 13: {self.tricks_won_13}")
+        cards_processed = 0
+        seat_processing = self.lead_seat
+        winning_player = -1
+        while cards_processed < 4:
+            if seat_processing == self.lead_seat:
+                lead_suit = self.cards_played[self.lead_seat].suit
+            
+            if winning_player == -1:
+                winning_player = seat_processing
+            else:
+                if self.cards_played[winning_player].suit == self.trump_suit:
+                    if self.cards_played[winning_player].value == "J":
+                        pass
+                    elif self.cards_played[seat_processing].suit == self.left_bower_suit and self.cards_played[seat_processing].value == "J":
+                        ## Left Bower
+                        winning_player = seat_processing
+                    elif self.cards_played[seat_processing].suit == self.trump_suit:
+                        if self.is_value_bigger(self.cards_played[seat_processing], self.cards_played[winning_player]):
+                            winning_player = seat_processing
+                elif self.cards_played[winning_player].suit == self.left_bower_suit and self.cards_played[winning_player].value == "J":
+                    if self.cards_played[seat_processing].suit == self.trump_suit and self.cards_played[seat_processing].value == "J":
+                        winning_player = seat_processing
+                elif self.cards_played[seat_processing].suit == self.trump_suit:
+                    winning_player = seat_processing
+                elif self.cards_played[seat_processing].suit == self.left_bower_suit and self.cards_played[seat_processing].value == "J":
+                    winning_player = seat_processing
+                else:
+                    if self.cards_played[seat_processing].suit == lead_suit:
+                        if self.is_value_bigger(self.cards_played[seat_processing], self.cards_played[winning_player]):
+                            winning_player = seat_processing
+            cards_processed = cards_processed + 1
+            seat_processing = (seat_processing + 1) % 4
+        
+        print(f"Player {winning_player} wins the trick")
+        if winning_player in (0,2):
+            self.tricks_won_02 = self.tricks_won_02 + 1
+        else:
+            self.tricks_won_13 = self.tricks_won_13 + 1
+        self.curr_seat = winning_player
+        print(f"[TRICKS] Team 02: {self.tricks_won_02} - Team 13: {self.tricks_won_13}")
     
     def play_round(self):
         self.euchre_deal_cards()
@@ -272,14 +329,17 @@ class EuchreTable:
             return
         self.print_state()
         
-        self.tricks_won_02 = self.tricks_won_03 =  0
+        self.tricks_won_02 = self.tricks_won_13 =  0
         while self.tricks_won_02 + self.tricks_won_13 < 5:
+            self.print_state()
             self.lead_seat = self.curr_seat
             self.cards_played = {0 : None, 1 : None, 2 : None, 3 : None}
             self.play_trick()
         self.process_round()
 
         input("Press Enter to continue...")
+        self.dealer = (self.dealer + 1) % 4
+        self.curr_seat = (self.dealer + 1) % 4
     
     def process_round(self):
         if self.trump_caller in (0, 2):
@@ -297,7 +357,7 @@ class EuchreTable:
             else:
                 self.score_02 = self.score_02 + 2
         
-        print(f"SCORE - Team 02: {self.score_02} - Team 13: {self.score_13}")
+        print(f"[SCORE] Team 02: {self.score_02} - Team 13: {self.score_13}")
 
     def print_state(self):
         ## Print Game Info
