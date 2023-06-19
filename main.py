@@ -15,8 +15,7 @@ class PlayerTrumpDecision(Enum):
 
 class PlayerCardDecision(Enum):
     PLAYER = 0
-    LAST_CARD = 1
-    RANDOM = 2
+    RANDOM = 1
 
 class Card:
     def __init__(self, value, suit):
@@ -25,7 +24,6 @@ class Card:
     
     def get_card_string(self):
         return f" {self.value}{self.suit.value}"
-
 
 class Deck:
     def __init__(self, values, suits):
@@ -46,7 +44,7 @@ class Deck:
         self.current.append(card)
 
 class Player:
-    def __init__(self, seat_number, is_player = False, trump_decision_logic = PlayerTrumpDecision.ALWAYS_ACCEPT, card_decision_logic = PlayerCardDecision.LAST_CARD):
+    def __init__(self, seat_number, is_player = False, trump_decision_logic = PlayerTrumpDecision.ALWAYS_ACCEPT, card_decision_logic = PlayerCardDecision.RANDOM):
         self.hand = []
         self.seat_number = seat_number
         self.partner_seat_number = (seat_number + 2) % 4
@@ -123,7 +121,6 @@ class Player:
         self.hand.sort(key = compare_pre_trump if not trump_suit else compare_trump)
     
     def decide_trump(self, up_card, hidden_up_card, dealer):
-        ## TODO: Add AI to determine whether choosing trump is worth it
         if self.trump_decision_logic == PlayerTrumpDecision.ALWAYS_ACCEPT:
             return up_card.suit
         elif self.trump_decision_logic == PlayerTrumpDecision.RANDOM:
@@ -134,10 +131,31 @@ class Player:
 
         return up_card.suit
 
-    def play_card(self, lead_seat, cards_played):
-        ## TODO
-        if self.card_decision_logic == PlayerCardDecision.LAST_CARD:
-            return self.hand.pop()
+    def play_card(self, trump_suit, left_bower_suit, lead_seat, cards_played):
+        lead_card = cards_played[lead_seat]
+        if not lead_card:
+            playable_cards = self.hand
+        else:
+            playable_cards = []
+
+            for card in self.hand:
+                if lead_card.suit == trump_suit and card.suit == left_bower_suit and card.value == "J":
+                    playable_cards.append(card)
+                elif lead_card.suit == left_bower_suit and lead_card.value == "J" and card.suit == trump_suit:
+                    playable_cards.append(card)
+                elif lead_card.suit == card.suit:
+                    if card.value == "J" and card.suit == left_bower_suit:
+                        continue
+                    else:
+                        playable_cards.append(card)
+            
+            if not playable_cards:
+                playable_cards = self.hand
+
+        if self.card_decision_logic == PlayerCardDecision.RANDOM:
+            choice = random.choice(playable_cards)
+            self.hand.remove(choice)
+            return choice
         
         return self.hand.pop()
 
@@ -268,7 +286,7 @@ class EuchreTable:
     def play_trick(self):
         num_cards_played = 0
         while num_cards_played < 4:
-            self.cards_played[self.curr_seat] = self.players[self.curr_seat].play_card(self.lead_seat, self.cards_played)
+            self.cards_played[self.curr_seat] = self.players[self.curr_seat].play_card(self.trump_suit, self.left_bower_suit, self.lead_seat, self.cards_played)
             print("Table")
             for player in self.cards_played:
                 print(f"{player} : {self.cards_played[player].get_card_string() if self.cards_played[player] else 'None'}")
