@@ -341,9 +341,10 @@ class EuchreTable:
         self.euchre_deal_cards()
         self.print_state()
         if not self.determine_trump():
-            ## TODO: If dealer, stuck or reshuffle TBD
             self.print_state()
             input("No trump. Press Enter to continue...")
+            self.dealer = (self.dealer + 1) % 4
+            self.curr_seat = (self.dealer + 1) % 4
             return
         self.print_state()
         
