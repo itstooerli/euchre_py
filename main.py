@@ -18,73 +18,86 @@ class PlayerCardDecision(Enum):
     RANDOM = 1
 
 class Card:
-    def __init__(self, value, suit):
-        self.value = value
+    def __init__(self, rank: str, suit: Suit):
+        """Card class constructor to initialize the object
+        
+        Input Arguments:
+        rank -- the rank of the card
+        suit -- the suit of the card
+        """
+        self.rank = rank
         self.suit = suit
     
-    def get_card_string(self):
-        return f" {self.value}{self.suit.value}"
+    def get_card_string(self) -> str:
+        """Returns the string representation of the card"""
+        return f" {self.rank}{self.suit.value}"
 
 class Deck:
-    def __init__(self, values, suits):
-        self.base = []
+    def __init__(self, ranks: list[str], suits: list[Suit]):
+        """Deck class constructor to initialize the object
+        
+        Input Arguments:
+        ranks -- a list of the possible ranks for the deck
+        suits -- a list of the possible suits for the deck
+        """
+        self.base: list[Card] = []
         for suit in suits:
-            for value in values:
-                self.base.append(Card(value, suit))
-        self.current = []
+            for rank in ranks:
+                self.base.append(Card(rank, suit))
+        self.current: list[Card] = []
     
     def shuffle(self):
+        """Resets the current deck as a shuffled copy of the base deck"""
         self.current = copy.deepcopy(self.base)
         random.shuffle(self.current)
     
-    def deal_one_card(self):
+    def deal_one_card(self) -> Card:
+        """Removes a card from the current deck"""
         return self.current.pop()
     
-    def add_back_to_deck(self, card):
+    def add_back_to_deck(self, card: Card):
+        """Adds a card back to the current deck
+        
+        Input Arguments:
+        card -- the card to add back to the current deck
+        """
         self.current.append(card)
 
 class Player:
-    def __init__(self, seat_number, is_player = False, trump_decision_logic = PlayerTrumpDecision.ALWAYS_ACCEPT, card_decision_logic = PlayerCardDecision.RANDOM):
-        self.hand = []
+    def __init__(self,
+                 seat_number: int, 
+                 is_user: bool = False, 
+                 trump_decision_logic: PlayerTrumpDecision = PlayerTrumpDecision.ALWAYS_ACCEPT, 
+                 card_decision_logic: PlayerCardDecision = PlayerCardDecision.RANDOM):
+        """Player class constructor to initialize the object
+        
+        Input Arguments:
+        seat_number -- the number from 0 to 3 representing the position of the player
+        is_player   -- boolean indicating whether the player is a human user
+        trump_decision_logic -- the logic this player uses during the trump decision phase
+        card_decision_logic  -- the logic this player uses during the trick taking phase
+        """
+        self.hand: list[Card] = []
         self.seat_number = seat_number
         self.partner_seat_number = (seat_number + 2) % 4
-        self.is_player = is_player
+        self.is_user = is_user
         self.trump_decision_logic = trump_decision_logic
         self.card_decision_logic = card_decision_logic
     
-    def add_card(self, card):
+    def add_card(self, card: Card):
+        """Add a card to the player's hand"""
         self.hand.append(card)
 
-    def sort_hand(self, trump_suit, left_bower_suit):
-        def compare_pre_trump(card : Card):
-            value = 0
-            if card.value == "A":
-                value = 1
-            elif card.value == "K":
-                value = 2
-            elif card.value == "Q":
-                value = 3
-            elif card.value == "J":
-                value = 4
-            elif card.value == "10":
-                value = 5
-            elif card.value == "9":
-                value = 6
-
-            if card.suit == Suit.SPADES:
-                value = value + 0
-            elif card.suit == Suit.HEARTS:
-                value = value + 6
-            elif card.suit == Suit.CLUBS:
-                value = value + 12
-            elif card.suit == Suit.DIAMONDS:
-                value = value + 18
-            
-            return value
+    def sort_hand(self, trump_suit: Suit, left_bower_suit: Suit):
+        """Rearrange the player's hand in the order [SPADES, HEARTS, CLUBS, DIAMONDS] and appropriate trump order
         
+        Input Arguments:
+        trump_suit      -- the suit decided to be trump for this round
+        left_bower_suit -- the suit of the other Jack that is trump (if trump is SPADES, left bower is CLUBS)
+        """
         def compare_trump(card : Card):
             value = 0
-            if card.value == "J":
+            if trump_suit and card.rank == "J":
                 if card.suit == trump_suit:
                     value = -7
                     return value
@@ -92,17 +105,17 @@ class Player:
                     value = -6
                     return value
 
-            if card.value == "A":
+            if card.rank == "A":
                 value = 1
-            elif card.value == "K":
+            elif card.rank == "K":
                 value = 2
-            elif card.value == "Q":
+            elif card.rank == "Q":
                 value = 3
-            elif card.value == "J":
+            elif card.rank == "J":
                 value = 4
-            elif card.value == "10":
+            elif card.rank == "10":
                 value = 5
-            elif card.value == "9":
+            elif card.rank == "9":
                 value = 6
 
             if card.suit == trump_suit:
@@ -118,9 +131,15 @@ class Player:
             
             return value
             
-        self.hand.sort(key = compare_pre_trump if not trump_suit else compare_trump)
+        self.hand.sort(key = compare_trump)
     
-    def decide_trump(self, up_card, hidden_up_card, dealer):
+    def decide_trump(self, up_card: Card, hidden_up_card: Card):
+        """Decide whether the player wishes to serve trump based on the trump decision logic, returns the suit if decided, None if passed
+        
+        Input Arguments:
+        up_card        -- the card being offered to determine trump suit
+        hidden_up_card -- the now-hidden up_card which cannot be chosen as trump if previously passed on
+        """
         if self.trump_decision_logic == PlayerTrumpDecision.ALWAYS_ACCEPT:
             return up_card.suit
         elif self.trump_decision_logic == PlayerTrumpDecision.RANDOM:
@@ -131,7 +150,15 @@ class Player:
 
         return up_card.suit
 
-    def play_card(self, trump_suit, left_bower_suit, lead_seat, cards_played):
+    def play_card(self, trump_suit: Suit, left_bower_suit: Suit, lead_seat: int, cards_played: list[Card]):
+        """Decide which card the player will play based on the card decision logic, returns the Card
+        
+        Input Arguments:
+        trump_suit      -- the trump suit
+        left_bower_suit -- the suit of the left bower
+        lead_seat       -- the seat that led suit
+        cards_played    -- an array of length 4 of Cards, None if the seat has not played yet
+        """
         lead_card = cards_played[lead_seat]
         if not lead_card:
             playable_cards = self.hand
@@ -139,12 +166,12 @@ class Player:
             playable_cards = []
 
             for card in self.hand:
-                if lead_card.suit == trump_suit and card.suit == left_bower_suit and card.value == "J":
+                if lead_card.suit == trump_suit and card.suit == left_bower_suit and card.rank == "J":
                     playable_cards.append(card)
-                elif lead_card.suit == left_bower_suit and lead_card.value == "J" and card.suit == trump_suit:
+                elif lead_card.suit == left_bower_suit and lead_card.rank == "J" and card.suit == trump_suit:
                     playable_cards.append(card)
                 elif lead_card.suit == card.suit:
-                    if card.value == "J" and card.suit == left_bower_suit:
+                    if card.rank == "J" and card.suit == left_bower_suit:
                         continue
                     else:
                         playable_cards.append(card)
@@ -160,18 +187,25 @@ class Player:
         return self.hand.pop()
 
 class EuchreTable:
-    def __init__(self, trump_logic = [], test_mode = False):
+    def __init__(self, 
+                 trump_logic: list[PlayerTrumpDecision] = [], 
+                 test_mode: bool = False):
+        """EuchreTable class constructor to initialize the object
+
+        Input Arguments:
+        trump_logic -- an array holding the trump decision logic for each of the players
+        test_mode   -- boolean for whether to run the table in test mode, True if yes
+        """
         self.test_mode = test_mode
-        
         self.players = {
-            0 : Player(0, False, trump_logic[0] if len(trump_logic) > 0 else None),
-            1 : Player(1, False, trump_logic[1] if len(trump_logic) > 1 else None),
-            2 : Player(2, False, trump_logic[2] if len(trump_logic) > 2 else None),
-            3 : Player(3, False, trump_logic[3] if len(trump_logic) > 3 else None),
+            0 : Player(0, False, trump_logic[0] if len(trump_logic) > 0 and trump_logic[0] else None),
+            1 : Player(1, False, trump_logic[1] if len(trump_logic) > 1 and trump_logic[1] else None),
+            2 : Player(2, False, trump_logic[2] if len(trump_logic) > 2 and trump_logic[2] else None),
+            3 : Player(3, False, trump_logic[3] if len(trump_logic) > 3 and trump_logic[3] else None),
         }
-        values = ["9","10","J","Q","K","A"]
+        ranks = ["9","10","J","Q","K","A"]
         suits = [Suit.SPADES, Suit.HEARTS, Suit.CLUBS, Suit.DIAMONDS]
-        self.deck = Deck(values, suits)
+        self.deck = Deck(ranks, suits)
         self.dealer = 0
         self.curr_seat = 0
         self.up_card = None
@@ -186,34 +220,37 @@ class EuchreTable:
         self.tricks_won_02 = 0
         self.tricks_won_13 = 0
     
-    def is_value_bigger(self, card1, card2):
+    def is_value_bigger(self, card1: Card, card2: Card):
+        """Returns True if the value of card1 is greater than card2"""
         value1 = self.assign_card_value(card1)
         value2 = self.assign_card_value(card2)
         return value1 > value2
     
-    def assign_card_value(self, card):
-        if card.value == "9":
+    def assign_card_value(self, card: Card):
+        """Returns the relative ranking of the card in euchre w/o trump"""
+        if card.rank == "9":
             return 0
-        elif card.value == "10":
+        elif card.rank == "10":
             return 1
-        elif card.value == "J":
+        elif card.rank == "J":
             return 2
-        elif card.value == "Q":
+        elif card.rank == "Q":
             return 3
-        elif card.value == "K":
+        elif card.rank == "K":
             return 4
-        elif card.value == "A":
+        elif card.rank == "A":
             return 5
         return 0
 
     def determine_dealer(self):
+        """Runs the phase to determine the dealer - currently, the seat w/ the first black jack"""
         if self.test_mode: print("Determing Dealer...")
         curr_seat = 0
         self.deck.shuffle()
         curr_card = self.deck.deal_one_card()
         if self.test_mode: print(f"({curr_seat % 4}){curr_card.get_card_string()}", end='')
 
-        while curr_card.value != "J" or curr_card.suit not in (Suit.SPADES, Suit.CLUBS):
+        while curr_card.rank != "J" or curr_card.suit not in (Suit.SPADES, Suit.CLUBS):
             curr_seat = curr_seat + 1
             curr_card = self.deck.deal_one_card()
             if self.test_mode: print(f" ({curr_seat % 4}){curr_card.get_card_string()}", end='')
@@ -223,6 +260,7 @@ class EuchreTable:
         if self.test_mode: print()
     
     def euchre_deal_cards(self):
+        """Resets the deck and deals 5 cards to each player, in euchre-fashion"""
         self.deck.shuffle()
         max_hand_size = 5
 
@@ -245,12 +283,14 @@ class EuchreTable:
         if self.test_mode: self.print_state()
 
     def sort_player_hands(self):
+        """Sorts each of the player's hands in suit order then euchre-rank order"""
         for player in self.players.values():
             player.sort_hand(self.trump_suit, self.left_bower_suit)
     
     def determine_trump(self):
+        """Runs the phase to determine the trump"""
         self.curr_seat = (self.dealer + 1) % 4
-        self.trump_suit = self.players[self.curr_seat].decide_trump(self.up_card, self.hidden_up_card, self.dealer)
+        self.trump_suit = self.players[self.curr_seat].decide_trump(self.up_card, self.hidden_up_card)
         
         while not self.trump_suit:
             print(f"Seat {self.curr_seat} passes.")
@@ -265,7 +305,7 @@ class EuchreTable:
                 else:
                     return False
             
-            self.trump_suit = self.players[self.curr_seat].decide_trump(self.up_card, self.hidden_up_card, self.dealer)
+            self.trump_suit = self.players[self.curr_seat].decide_trump(self.up_card, self.hidden_up_card)
         
         if self.trump_suit == Suit.SPADES:
             self.left_bower_suit = Suit.CLUBS
@@ -284,6 +324,7 @@ class EuchreTable:
         return True
 
     def play_trick(self):
+        """Runs the phase to play a trick (1 card played by each player)"""
         num_cards_played = 0
         while num_cards_played < 4:
             self.cards_played[self.curr_seat] = self.players[self.curr_seat].play_card(self.trump_suit, self.left_bower_suit, self.lead_seat, self.cards_played)
@@ -296,6 +337,7 @@ class EuchreTable:
         input("Press Enter to continue...")
     
     def process_trick(self):
+        """Determines which team won the trick and updates the number of tricks won appropriately"""
         cards_processed = 0
         seat_processing = self.lead_seat
         winning_player = -1
@@ -307,20 +349,20 @@ class EuchreTable:
                 winning_player = seat_processing
             else:
                 if self.cards_played[winning_player].suit == self.trump_suit:
-                    if self.cards_played[winning_player].value == "J":
+                    if self.cards_played[winning_player].rank == "J":
                         pass
-                    elif self.cards_played[seat_processing].suit == self.left_bower_suit and self.cards_played[seat_processing].value == "J":
+                    elif self.cards_played[seat_processing].suit == self.left_bower_suit and self.cards_played[seat_processing].rank == "J":
                         ## Left Bower
                         winning_player = seat_processing
                     elif self.cards_played[seat_processing].suit == self.trump_suit:
                         if self.is_value_bigger(self.cards_played[seat_processing], self.cards_played[winning_player]):
                             winning_player = seat_processing
-                elif self.cards_played[winning_player].suit == self.left_bower_suit and self.cards_played[winning_player].value == "J":
-                    if self.cards_played[seat_processing].suit == self.trump_suit and self.cards_played[seat_processing].value == "J":
+                elif self.cards_played[winning_player].suit == self.left_bower_suit and self.cards_played[winning_player].rank == "J":
+                    if self.cards_played[seat_processing].suit == self.trump_suit and self.cards_played[seat_processing].rank == "J":
                         winning_player = seat_processing
                 elif self.cards_played[seat_processing].suit == self.trump_suit:
                     winning_player = seat_processing
-                elif self.cards_played[seat_processing].suit == self.left_bower_suit and self.cards_played[seat_processing].value == "J":
+                elif self.cards_played[seat_processing].suit == self.left_bower_suit and self.cards_played[seat_processing].rank == "J":
                     winning_player = seat_processing
                 else:
                     if self.cards_played[seat_processing].suit == lead_suit:
@@ -338,6 +380,7 @@ class EuchreTable:
         print(f"[TRICKS] Team 02: {self.tricks_won_02} - Team 13: {self.tricks_won_13}")
     
     def play_round(self):
+        """Runs the phase to play the euchre round, where each player plays each of the 5 cards"""
         self.euchre_deal_cards()
         self.print_state()
         if not self.determine_trump():
@@ -361,6 +404,7 @@ class EuchreTable:
         self.curr_seat = (self.dealer + 1) % 4
     
     def process_round(self):
+        """Determines who won the most tricks and updates the score appropriately"""
         if self.trump_caller in (0, 2):
             if self.tricks_won_02 == 5:
                 self.score_02 = self.score_02 + 2
@@ -379,6 +423,7 @@ class EuchreTable:
         print(f"[SCORE] Team 02: {self.score_02} - Team 13: {self.score_13}")
 
     def print_state(self):
+        """Prints the current state of the game"""
         ## Print Game Info
         print(f"Dealer: Player {self.dealer}")
         if self.trump_suit: print(f"Seat {self.curr_seat} turn")
@@ -403,11 +448,13 @@ class EuchreTable:
             print(f"Up Card: {self.up_card.get_card_string()}")
     
     def play(self):
+        """Plays a game of euchre until a team has 10 points"""
         self.determine_dealer()
         while self.score_02 < 10 and self.score_13 < 10:
             self.play_round()
 
 def main():
+    """The main body that initializes the game and plays"""
     game = EuchreTable([PlayerTrumpDecision.RANDOM, PlayerTrumpDecision.RANDOM, PlayerTrumpDecision.RANDOM, PlayerTrumpDecision.RANDOM], True)
     game.play()
 
