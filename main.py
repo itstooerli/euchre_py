@@ -81,8 +81,8 @@ class Player:
         self.seat_number = seat_number
         self.partner_seat_number = (seat_number + 2) % 4
         self.is_user = is_user
-        self.trump_decision_logic = trump_decision_logic
-        self.card_decision_logic = card_decision_logic
+        self.trump_decision_logic = trump_decision_logic if trump_decision_logic is not None else PlayerTrumpDecision.ALWAYS_ACCEPT
+        self.card_decision_logic = card_decision_logic if card_decision_logic is not None else PlayerCardDecision.RANDOM
     
     def add_card(self, card: Card):
         """Add a card to the player's hand"""
@@ -188,20 +188,22 @@ class Player:
 
 class EuchreTable:
     def __init__(self, 
-                 trump_logic: list[PlayerTrumpDecision] = [], 
+                 trump_logic: dict[int, PlayerTrumpDecision] = {}, 
+                 play_logic: dict[int, PlayerCardDecision] = {},
                  test_mode: bool = False):
         """EuchreTable class constructor to initialize the object
 
         Input Arguments:
-        trump_logic -- an array holding the trump decision logic for each of the players
+        trump_logic -- a dictionary holding each player's trump decision logic
+        play_logic  -- a dictionary holding each player decision logic for which card to play
         test_mode   -- boolean for whether to run the table in test mode, True if yes
         """
         self.test_mode = test_mode
         self.players = {
-            0 : Player(0, False, trump_logic[0] if len(trump_logic) > 0 and trump_logic[0] else None),
-            1 : Player(1, False, trump_logic[1] if len(trump_logic) > 1 and trump_logic[1] else None),
-            2 : Player(2, False, trump_logic[2] if len(trump_logic) > 2 and trump_logic[2] else None),
-            3 : Player(3, False, trump_logic[3] if len(trump_logic) > 3 and trump_logic[3] else None),
+            0 : Player(0, False, trump_logic.get(0, None), play_logic.get(0, None)),
+            1 : Player(1, False, trump_logic.get(1, None), play_logic.get(1, None)),
+            2 : Player(2, False, trump_logic.get(2, None), play_logic.get(2, None)),
+            3 : Player(3, False, trump_logic.get(3, None), play_logic.get(3, None)),
         }
         ranks = ["9","10","J","Q","K","A"]
         suits = [Suit.SPADES, Suit.HEARTS, Suit.CLUBS, Suit.DIAMONDS]
@@ -455,7 +457,15 @@ class EuchreTable:
 
 def main():
     """The main body that initializes the game and plays"""
-    game = EuchreTable([PlayerTrumpDecision.RANDOM, PlayerTrumpDecision.RANDOM, PlayerTrumpDecision.RANDOM, PlayerTrumpDecision.RANDOM], True)
+    player_trump_decision = {0 : PlayerTrumpDecision.RANDOM,
+                             1 : PlayerTrumpDecision.RANDOM,
+                             2 : PlayerTrumpDecision.RANDOM,
+                             3 : PlayerTrumpDecision.RANDOM,}
+    player_play_decision = {0 : PlayerCardDecision.RANDOM,
+                            1 : PlayerCardDecision.RANDOM,
+                            2 : PlayerCardDecision.RANDOM,
+                            3 : PlayerCardDecision.RANDOM,}
+    game = EuchreTable(player_trump_decision, player_play_decision, True)
     game.play()
 
 if __name__ == "__main__":
